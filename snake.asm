@@ -58,7 +58,7 @@ putpixel proc
     add ax, bx
     mov di, ax
     mov dl, 7
-    mov [es:di], dl
+    mov es:[di], dl
     ret
 putpixel endp
 
@@ -104,69 +104,42 @@ putsquare proc
 putsquare endp
 
 rand_position proc
-    ; OUTPUT:
-    ;   cx - x
-    ;   dx - y
-    ; UNALTERED:
-    ;   bx, es
-
     push bp
     mov bp, sp
     sub sp, 6
 
+    ; This function returns a random (x, y) coordinate
+    ; in the range (0, 0) and (GRID_WIDTH - 1, GRID_HEIGHT - 1).
+    ;
+    ; OUTPUT:
+    ;   x       = cx
+    ;   y       = dx
+    ;
     ; LOCAL VARIABLES:
-    ;   x = [bp - 2]
-    ;   rand = [bp - 6]
+    ;   x       = word ptr [bp - 2]
+    ;   rand    = dword ptr [bp - 6]
 
     mov ax, 0
     int 1Ah     ; use time as random value
 
-    mov [bp - 4], dx ; save rand (low word)
-    mov [bp - 6], cx ; save rand (high word)
+    mov [bp - 4], dx    ; save rand (low word)
+    mov [bp - 6], cx    ; save rand (high word)
 
-    ; TODO apply xorshift here too?
+    lea ax, [bp - 6]    ; ax = &rand
+    push ax             ; pass &rand to function
+    call xorshift
 
     ; get x
-    mov ax, dx
-    mov dx, cx
+    mov ax, [bp - 4]
+    mov dx, [bp - 6]
     mov cx, GRID_WIDTH
     div cx
 
-    ; save x value
-    mov [bp - 2], dx
+    mov [bp - 2], dx    ; save x value
 
-    ; rand ^= rand << 7
-    mov ax, [bp - 4]
-    mov cx, ax
-    mov dx, [bp - 6]
-    shl ax, 7
-    shr cx, 16 - 7
-    shl dx, 7
-    and dx, cx
-    xor [bp - 4], ax
-    xor [bp - 6], dx
-
-    ; rand ^= rand >> 9
-    mov ax, [bp - 4]
-    mov dx, [bp - 6]
-    mov cx, dx
-    shr ax, 9
-    shr dx, 9
-    shl cx, 16 - 9
-    and ax, cx
-    xor [bp - 4], ax
-    xor [bp - 6], dx
-
-    ; rand ^= rand << 8
-    mov ax, [bp - 4]
-    mov cx, ax
-    mov dx, [bp - 6]
-    shl ax, 8
-    shr cx, 16 - 8
-    shl dx, 8
-    and dx, cx
-    xor [bp - 4], ax
-    xor [bp - 6], dx
+    lea ax, [bp - 6]    ; ax = &rand
+    push ax             ; pass &rand to function
+    call xorshift
 
     ; get y
     mov ax, [bp - 4]
@@ -180,5 +153,50 @@ rand_position proc
     pop bp
     ret
 rand_position endp
+
+xorshift proc
+    push bp
+    mov bp, sp
+
+    ; This function applies xorshift to
+    ; a 32-bit input value (in place).
+    ;
+    ; ARGUMENTS:
+    ;   &rand = word ptr [bp + 4]
+
+    mov bx, [bp + 4]    ; bx = &rand
+
+    ; rand ^= rand << 13
+    mov dx, ss:[bx]
+    mov ax, ss:[bx + 2]
+    mov cx, ax
+    shl ax, 13
+    shr cx, 16 - 13
+    shl dx, 13
+    and dx, cx
+    xor ss:[bx], dx
+    xor ss:[bx + 2], ax
+
+    ; rand ^= rand >> 17
+    mov dx, ss:[bx]
+    shr dx, 1
+    xor word ptr [bx], 0
+    xor ss:[bx + 2], dx
+
+    ; rand ^= rand << 5
+    mov dx, ss:[bx]
+    mov ax, ss:[bx + 2]
+    mov cx, ax
+    shl ax, 5
+    shr cx, 16 - 5
+    shl dx, 5
+    and dx, cx
+    xor ss:[bx], dx
+    xor ss:[bx + 2], ax
+
+    mov sp, bp
+    pop bp
+    ret 2
+xorshift endp
 
 end main
