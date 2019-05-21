@@ -75,14 +75,22 @@ main:
     input_loop_done:
     ;::::::::::::::::::::::::
 
+    ; clear block that needs clearing
+    push 0          ; black
+    push [bp - 4]
+    push [bp - 2]
+    call putsquare
+
+    ; update position that needs clearing
     mov ax, word ptr [bp - 6]
     add [bp - 2], ax
     mov ax, word ptr [bp - 8]
     add [bp - 4], ax
 
-    mov ax, [bp - 2]
-    mov bx, [bp - 4]
-    mov dl, 7   ; color
+    ; draw new block
+    push 7          ; white
+    push [bp - 4]
+    push [bp - 2]
     call putsquare
 
     ; delay
@@ -111,52 +119,63 @@ putpixel:
     ;   bx, dx, es
 
     mov cx, 320
+    push dx
     mul cx
+    pop dx
     add ax, bx
     mov di, ax
-    mov dl, 7
     mov es:[di], dl
     ret
 
 putsquare:
-    ; INPUTS:
-    ;   ax - x
-    ;   bx - y
-    ;   dl - color
-    ; UNALTERED:
-    ;   dx, es
+    push bp
+    mov bp, sp
+
+    ; This function places a square of pixels of
+    ; a specific color at the coordinates (x, y).
+    ; The color is represented in the low 8 bits
+    ; of the 16-bit argument.
+    ;
+    ; ARGUMENTS
+    ;   x       = word ptr [bp + 4]
+    ;   y       = word ptr [bp + 6]
+    ;   color   = word ptr [bp + 8]
 
     mov cx, BLOCK_SIZE  ; set outer loop counter
 
     ; multiply x and y by BLOCK_SIZE
-    mul cx      ; x = x * BLOCK_SIZE
-    push ax     ; save x
-    mov ax, bx  ; ax = y
-    mul cx      ; y = y * BLOCK_SIZE
-    pop bx      ; bx = x
+    mov ax, [bp + 4]
+    mul cx              ; x = x * BLOCK_SIZE
+    mov [bp + 4], ax
+
+    mov ax, [bp + 6]
+    mul cx              ; y = y * BLOCK_SIZE
+    mov [bp + 6], ax
 
     putsquare_yloop:
     push cx             ; save outer loop counter
-    push bx
     mov cx, BLOCK_SIZE  ; set inner loop counter
 
     putsquare_xloop:
-
     push cx
-    push ax
-    call putpixel
-    pop ax
-    pop cx
 
-    inc bx
+    mov bx, [bp + 4]
+    mov ax, [bp + 6]
+    mov dx, [bp + 8]
+    call putpixel
+
+    inc word ptr [bp + 4]
+    pop cx
     loop putsquare_xloop
 
-    pop bx
+    sub word ptr [bp + 4], BLOCK_SIZE
+    inc word ptr [bp + 6]
     pop cx
-    inc ax
     loop putsquare_yloop
 
-    ret
+    mov sp, bp
+    pop bp
+    ret 6
 
 rand_position:
     push bp
