@@ -5,7 +5,17 @@ BLOCK_SIZE equ 5
 GRID_WIDTH equ (320 / BLOCK_SIZE)
 GRID_HEIGHT equ (200 / BLOCK_SIZE)
 .code
-main proc
+
+main:
+    mov bp, sp
+    sub sp, 8
+
+    ; LOCAL VARIABLES:
+    ;   x       = word ptr [bp - 2]
+    ;   y       = word ptr [bp - 4]
+    ;   x_diff  = word ptr [bp - 6]
+    ;   y_diff  = word ptr [bp - 8]
+
     ; mov ax, @data
     ; mov ds, ax
 
@@ -15,37 +25,84 @@ main proc
     mov ax, 0A000h
     mov es, ax
 
-    mov cx, 10
-    rand_test_loop:
-    push cx
+    mov word ptr [bp - 2], GRID_WIDTH/2
+    mov word ptr [bp - 4], GRID_HEIGHT/2
 
-    call rand_position
-    mov ax, cx
-    mov bx, dx
+    ;:::::::::::: main loop :::::::::::::
+    update:
+
+    mov word ptr [bp - 6], 0    ; clear x_diff
+    mov word ptr [bp - 8], 0    ; clear y_diff
+
+    ;:::::::: input :::::::::
+    input_loop:
+
+    mov ah, 06h     ; direct console i/o
+    mov dl, 0FFh    ; read from stdin buffer
+    int 21h
+
+    jz input_loop_done  ; stop if buffer is empty
+
+    cmp al, 71h     ; q - quit
+    jz exit
+
+    cmp al, 0       ; check if extended key code
+    jnz input_loop
+    int 21h         ; get extended key code
+
+    cmp al, 48h             ; up arrow
+    jnz input_down_arrow
+    dec word ptr [bp - 8]
+    jmp input_loop_done
+
+    input_down_arrow:
+    cmp al, 50h             ; down arrow
+    jnz input_right_arrow
+    inc word ptr [bp - 8]
+    jmp input_loop_done
+
+    input_right_arrow:
+    cmp al, 4Dh             ; up arrow
+    jnz input_left_arrow
+    inc word ptr [bp - 6]
+    jmp input_loop_done
+
+    input_left_arrow:
+    cmp al, 4Bh             ; up arrow
+    jnz input_loop
+    dec word ptr [bp - 6]
+
+    input_loop_done:
+    ;::::::::::::::::::::::::
+
+    mov ax, word ptr [bp - 6]
+    add [bp - 2], ax
+    mov ax, word ptr [bp - 8]
+    add [bp - 4], ax
+
+    mov ax, [bp - 2]
+    mov bx, [bp - 4]
     mov dl, 7   ; color
     call putsquare
 
-    mov cx, 0007h
+    ; delay
+    mov cx, 0000h
     mov dx, 8480h
     mov ax, 8600h
     int 15h
 
-    pop cx
-    loop rand_test_loop
+    jmp update
+    ;::::::::::::::::::::::::::::::::::::
 
-    getkey:
-    mov ah, 0   ; get key
-    int 16h     ; interrupt
-    jz getkey   ; keep waiting until key pressed
+    exit:
 
-    mov ax, 3   ; normal mode
-    int 10h     ; video BIOS interrupt
+    mov ax, 3       ; normal mode
+    int 10h         ; video BIOS interrupt
 
-    mov ax, 4c00h
+    mov ax, 4c00h   ; exit (return 0)
     int 21h
-main endp
 
-putpixel proc
+putpixel:
     ; INPUTS:
     ;   bx - x
     ;   ax - y
@@ -60,9 +117,8 @@ putpixel proc
     mov dl, 7
     mov es:[di], dl
     ret
-putpixel endp
 
-putsquare proc
+putsquare:
     ; INPUTS:
     ;   ax - x
     ;   bx - y
@@ -101,9 +157,8 @@ putsquare proc
     loop putsquare_yloop
 
     ret
-putsquare endp
 
-rand_position proc
+rand_position:
     push bp
     mov bp, sp
     sub sp, 6
@@ -152,9 +207,8 @@ rand_position proc
     mov sp, bp
     pop bp
     ret
-rand_position endp
 
-xorshift proc
+xorshift:
     push bp
     mov bp, sp
 
@@ -197,6 +251,5 @@ xorshift proc
     mov sp, bp
     pop bp
     ret 2
-xorshift endp
 
 end main
