@@ -111,32 +111,42 @@ main:
     int 21h
 
 putpixel:
-    ; INPUTS:
-    ;   bx - x
-    ;   ax - y
-    ;   dl - color
-    ; UNALTERED:
-    ;   bx, dx, es
+    push bp
+    mov bp, sp
 
+    ; Draws a pixel of a specified color
+    ; at the coordinates (x, y).
+    ;
+    ; ARGUMENTS:
+    ;   x       = word ptr [bp + 4]
+    ;   y       = word ptr [bp + 6]
+    ;   color   = word ptr [bp + 8]
+
+    mov ax, [bp + 6]    ; ax = y
     mov cx, 320
-    push dx
-    mul cx
-    pop dx
-    add ax, bx
+    mul cx              ; y * 320
+    add ax, [bp + 4]    ; y * 320 + x
     mov di, ax
-    mov es:[di], dl
-    ret
+    mov dx, [bp + 8]    ; dl = color
+    mov es:[di], dl     ; draw pixel
+
+    mov sp, bp
+    pop bp
+    ret 6
 
 putsquare:
     push bp
     mov bp, sp
 
-    ; This function places a square of pixels of
-    ; a specific color at the coordinates (x, y).
-    ; The color is represented in the low 8 bits
-    ; of the 16-bit argument.
+    ; Places a square of pixels of a specific
+    ; color at the coordinates (x, y).
     ;
-    ; ARGUMENTS
+    ; NOTES:
+    ; The color is represented by the low
+    ; 8 bits of the argument. The side length
+    ; of the square is equal to BLOCK_SIZE.
+    ;
+    ; ARGUMENTS:
     ;   x       = word ptr [bp + 4]
     ;   y       = word ptr [bp + 6]
     ;   color   = word ptr [bp + 8]
@@ -159,9 +169,9 @@ putsquare:
     putsquare_xloop:
     push cx
 
-    mov bx, [bp + 4]
-    mov ax, [bp + 6]
-    mov dx, [bp + 8]
+    push [bp + 8]
+    push [bp + 6]
+    push [bp + 4]
     call putpixel
 
     inc word ptr [bp + 4]
