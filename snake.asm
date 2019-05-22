@@ -13,8 +13,8 @@ main:
     ; LOCAL VARIABLES:
     ;   x       = word ptr [bp - 2]
     ;   y       = word ptr [bp - 4]
-    ;   x_diff  = word ptr [bp - 6]
-    ;   y_diff  = word ptr [bp - 8]
+    ;   x_dir   = word ptr [bp - 6]
+    ;   y_dir   = word ptr [bp - 8]
 
     ; mov ax, @data
     ; mov ds, ax
@@ -28,20 +28,24 @@ main:
     mov word ptr [bp - 2], GRID_WIDTH/2
     mov word ptr [bp - 4], GRID_HEIGHT/2
 
+    mov word ptr [bp - 6], 1    ; initialise x_dir
+    mov word ptr [bp - 8], 0    ; initialise y_dir
+
     ;:::::::::::: main loop :::::::::::::
     update:
 
-    mov word ptr [bp - 6], 0    ; clear x_diff
-    mov word ptr [bp - 8], 0    ; clear y_diff
-
     ;:::::::: input :::::::::
-    input_loop:
-
     mov ah, 06h     ; direct console i/o
     mov dl, 0FFh    ; read from stdin buffer
-    int 21h
+
+    input_loop:
+
+    int 21h         ; interrupt (get character)
 
     jz input_loop_done  ; stop if buffer is empty
+
+    xor bx, bx      ; new x_dir
+    xor cx, cx      ; new y_dir
 
     cmp al, 71h     ; q - quit
     jz exit
@@ -52,25 +56,36 @@ main:
 
     cmp al, 48h             ; up arrow
     jnz input_down_arrow
-    dec word ptr [bp - 8]
-    jmp input_loop_done
+    dec cx
+    jmp input_loop_almost_done
 
     input_down_arrow:
     cmp al, 50h             ; down arrow
     jnz input_right_arrow
-    inc word ptr [bp - 8]
-    jmp input_loop_done
+    inc cx
+    jmp input_loop_almost_done
 
     input_right_arrow:
     cmp al, 4Dh             ; up arrow
     jnz input_left_arrow
-    inc word ptr [bp - 6]
-    jmp input_loop_done
+    inc bx
+    jmp input_loop_almost_done
 
     input_left_arrow:
     cmp al, 4Bh             ; up arrow
     jnz input_loop
-    dec word ptr [bp - 6]
+    dec bx
+
+    input_loop_almost_done:
+
+    ; check new direction is perpendicular
+    cmp bx, [bp - 6]
+    jz input_loop
+    cmp cx, [bp - 8]
+    jz input_loop
+
+    mov [bp - 6], bx
+    mov [bp - 8], cx
 
     input_loop_done:
     ;::::::::::::::::::::::::
@@ -94,7 +109,7 @@ main:
     call putsquare
 
     ; delay
-    mov cx, 0000h
+    mov cx, 0001h
     mov dx, 8480h
     mov ax, 8600h
     int 15h
