@@ -8,13 +8,16 @@ GRID_HEIGHT equ (200 / BLOCK_SIZE)
 
 main:
     mov bp, sp
-    sub sp, 8
+    sub sp, 14
 
     ; LOCAL VARIABLES:
-    ;   x       = word ptr [bp - 2]
-    ;   y       = word ptr [bp - 4]
+    ;   fruit_x = word ptr [bp - 2]
+    ;   fruit_y = word ptr [bp - 4]
     ;   x_dir   = word ptr [bp - 6]
     ;   y_dir   = word ptr [bp - 8]
+    ;   length  = word ptr [bp - 10]
+    ;   x       = word ptr [bp - 12]
+    ;   y       = word ptr [bp - 14]
 
     ; mov ax, @data
     ; mov ds, ax
@@ -25,8 +28,14 @@ main:
     mov ax, 0A000h
     mov es, ax
 
-    mov word ptr [bp - 2], GRID_WIDTH/2
-    mov word ptr [bp - 4], GRID_HEIGHT/2
+    call place_fruit
+    mov [bp - 2], cx
+    mov [bp - 4], dx
+
+    mov word ptr [bp - 10], 1
+
+    mov word ptr [bp - 12], GRID_WIDTH/2
+    mov word ptr [bp - 14], GRID_HEIGHT/2
 
     mov word ptr [bp - 6], 1    ; initialise x_dir
     mov word ptr [bp - 8], 0    ; initialise y_dir
@@ -48,7 +57,16 @@ main:
     xor cx, cx      ; new y_dir
 
     cmp al, 71h     ; q - quit
-    jz exit
+    jnz no_exit
+    ; unconditional jump used because it
+    ; can store larger relative addresses
+    jmp exit
+    no_exit:
+
+    cmp al, 72h     ; r - restart
+    jnz no_restart
+    jmp restart
+    no_restart:
 
     cmp al, 0       ; check if extended key code
     jnz input_loop
@@ -92,21 +110,47 @@ main:
 
     ; clear block that needs clearing
     push 0          ; black
-    push [bp - 4]
-    push [bp - 2]
+    push [bp - 14]
+    push [bp - 12]
     call putsquare
 
-    ; update position that needs clearing
+    ;:::::: update position :::::::
     mov ax, word ptr [bp - 6]
-    add [bp - 2], ax
+    add [bp - 12], ax
+    jl restart
+    cmp word ptr [bp - 12], GRID_WIDTH
+    jge restart
+
     mov ax, word ptr [bp - 8]
-    add [bp - 4], ax
+    add [bp - 14], ax
+    jl restart
+    cmp word ptr [bp - 14], GRID_HEIGHT
+    jge restart
+    ;::::::::::::::::::::::::::::::
 
     ; draw new block
     push 7          ; white
-    push [bp - 4]
-    push [bp - 2]
+    push [bp - 14]
+    push [bp - 12]
     call putsquare
+
+    ;:::::::: place fruit :::::::::
+    mov cx, [bp - 2]
+    cmp cx, [bp - 12]
+    jnz place_fruit_done
+    mov cx, [bp - 4]
+    cmp cx, [bp - 14]
+    jnz place_fruit_done
+
+    inc word ptr [bp - 10]
+
+    call place_fruit
+
+    mov [bp - 2], cx
+    mov [bp - 4], dx
+
+    place_fruit_done:
+    ;::::::::::::::::::::::::::::::
 
     ; delay
     mov cx, 0001h
@@ -116,6 +160,18 @@ main:
 
     jmp update
     ;::::::::::::::::::::::::::::::::::::
+
+    restart:
+    mov sp, bp
+
+    mov cx, 320 * 200
+    clearscreen_loop:
+    mov di, cx
+    dec di
+    mov byte ptr es:[di], 0
+    loop clearscreen_loop
+
+    jmp main
 
     exit:
 
@@ -201,6 +257,31 @@ putsquare:
     mov sp, bp
     pop bp
     ret 6
+
+place_fruit:
+    push bp
+    mov bp, sp
+    sub sp, 4
+
+    ; LOCAL VARIABLES:
+    ;   x   = word ptr [bp - 2]
+    ;   y   = dword ptr [bp - 4]
+
+    call rand_position
+    mov [bp - 2], cx
+    mov [bp - 4], dx
+
+    push 27h
+    push dx
+    push cx
+    call putsquare
+
+    mov cx, [bp - 2]
+    mov dx, [bp - 4]
+
+    mov sp, bp
+    pop bp
+    ret
 
 rand_position:
     push bp
