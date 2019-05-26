@@ -1,23 +1,29 @@
 .model tiny
 ; .model small
 .stack 100h
+
 BLOCK_SIZE equ 5
 GRID_WIDTH equ (320 / BLOCK_SIZE)
 GRID_HEIGHT equ (200 / BLOCK_SIZE)
+INITIAL_LEN equ 3   ; must be greater than 1
+
 .code
 
 main:
     mov bp, sp
-    sub sp, 14
+    sub sp, 10 + 4 * INITIAL_LEN
 
     ; LOCAL VARIABLES:
-    ;   fruit_x = word ptr [bp - 2]
-    ;   fruit_y = word ptr [bp - 4]
-    ;   x_dir   = word ptr [bp - 6]
-    ;   y_dir   = word ptr [bp - 8]
-    ;   length  = word ptr [bp - 10]
-    ;   x       = word ptr [bp - 12]
-    ;   y       = word ptr [bp - 14]
+    ;   fruit_x     = word ptr [bp - 2]
+    ;   fruit_y     = word ptr [bp - 4]
+    ;   x_dir       = word ptr [bp - 6]
+    ;   y_dir       = word ptr [bp - 8]
+    ;   length      = word ptr [bp - 10]
+    ;   x1          = word ptr [bp - 12]
+    ;   y1          = word ptr [bp - 14]
+    ;   x2          = word ptr [bp - 16]
+    ;   y2          = word ptr [bp - 18]
+    ;   ...
 
     ; mov ax, @data
     ; mov ds, ax
@@ -28,14 +34,38 @@ main:
     mov ax, 0A000h
     mov es, ax
 
+    ; initial placement of fruit
     call place_fruit
     mov [bp - 2], cx
     mov [bp - 4], dx
 
-    mov word ptr [bp - 10], 1
+    mov word ptr [bp - 10], INITIAL_LEN     ; set starting length
 
-    mov word ptr [bp - 12], GRID_WIDTH/2
-    mov word ptr [bp - 14], GRID_HEIGHT/2
+    ; set initial positions and draw
+    lea di, [bp - 12]
+    mov bx, GRID_WIDTH/2
+    mov cx, INITIAL_LEN
+
+    initial_draw_loop:
+    push cx
+    push bx
+    push di
+
+    mov ss:[di], bx
+    mov word ptr ss:[di - 2], GRID_HEIGHT/2
+
+    push 7
+    push ss:[di - 2]
+    push ss:[di]
+    call putsquare
+
+    pop di
+    pop bx
+    pop cx
+
+    sub di, 4
+    dec bx
+    loop initial_draw_loop
 
     mov word ptr [bp - 6], 1    ; initialise x_dir
     mov word ptr [bp - 8], 0    ; initialise y_dir
@@ -108,11 +138,30 @@ main:
     input_loop_done:
     ;::::::::::::::::::::::::
 
+    mov di, sp
+
     ; clear block that needs clearing
-    push 0          ; black
-    push [bp - 14]
-    push [bp - 12]
+    push 0              ; black
+    push ss:[di]
+    push ss:[di + 2]
     call putsquare
+
+    mov di, sp
+    mov cx, [bp - 10]
+    dec cx              ; assumes length > 1
+
+    position_copy_loop:
+    ; copy y down
+    mov bx, ss:[di + 4]
+    mov ss:[di], bx
+
+    ; copy x down
+    mov bx, ss:[di + 6]
+    mov ss:[di + 2], bx
+
+    add di, 4
+
+    loop position_copy_loop
 
     ;:::::: update position :::::::
     mov ax, word ptr [bp - 6]
@@ -129,12 +178,12 @@ main:
     ;::::::::::::::::::::::::::::::
 
     ; draw new block
-    push 7          ; white
+    push 7              ; white
     push [bp - 14]
     push [bp - 12]
     call putsquare
 
-    ;:::::::: place fruit :::::::::
+    ;:::::::: check fruit :::::::::
     mov cx, [bp - 2]
     cmp cx, [bp - 12]
     jnz place_fruit_done
@@ -142,7 +191,8 @@ main:
     cmp cx, [bp - 14]
     jnz place_fruit_done
 
-    inc word ptr [bp - 10]
+    inc word ptr [bp - 10]  ; increment length
+    sub sp, 4               ; add space on stack for new coordinate
 
     call place_fruit
 
