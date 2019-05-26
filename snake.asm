@@ -177,6 +177,24 @@ main:
     jge restart
     ;::::::::::::::::::::::::::::::
 
+    mov di, sp
+    mov cx, [bp - 10]
+    dec cx              ; assumes length > 1
+    mov ax, [bp - 12]
+    mov bx, [bp - 14]
+
+    position_check_loop:
+    cmp ax, ss:[di + 2]
+    jnz position_check_loop_end
+
+    cmp bx, ss:[di]
+    jz restart
+
+    position_check_loop_end:
+
+    add di, 4
+    loop position_check_loop
+
     ; draw new block
     push 7              ; white
     push [bp - 14]
