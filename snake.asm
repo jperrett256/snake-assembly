@@ -2,7 +2,7 @@
 ; .model small
 .stack 100h
 
-BLOCK_SIZE equ 5
+BLOCK_SIZE equ 10
 GRID_WIDTH equ (320 / BLOCK_SIZE)
 GRID_HEIGHT equ (200 / BLOCK_SIZE)
 INITIAL_LEN equ 3   ; must be greater than 1
@@ -365,33 +365,32 @@ rand_position:
     ;
     ; LOCAL VARIABLES:
     ;   x       = word ptr [bp - 2]
-    ;   rand    = dword ptr [bp - 6]
+    ;   rand    = word ptr [bp - 4]
 
     mov ax, 0
     int 1Ah     ; use time as random value
 
-    mov [bp - 4], dx    ; save rand (low word)
-    mov [bp - 6], cx    ; save rand (high word)
+    mov [bp - 4], dx    ; save time (low) as rand
 
-    lea ax, [bp - 6]    ; ax = &rand
+    lea ax, [bp - 4]    ; ax = &rand
     push ax             ; pass &rand to function
     call xorshift
 
     ; get x
     mov ax, [bp - 4]
-    mov dx, [bp - 6]
+    xor dx, dx
     mov cx, GRID_WIDTH
     div cx
 
     mov [bp - 2], dx    ; save x value
 
-    lea ax, [bp - 6]    ; ax = &rand
+    lea ax, [bp - 4]    ; ax = &rand
     push ax             ; pass &rand to function
     call xorshift
 
     ; get y
     mov ax, [bp - 4]
-    mov dx, [bp - 6]
+    xor dx, dx
     mov cx, GRID_HEIGHT
     div cx
 
@@ -406,40 +405,27 @@ xorshift:
     mov bp, sp
 
     ; This function applies xorshift to
-    ; a 32-bit input value (in place).
+    ; a 16-bit input value (in place).
     ;
     ; ARGUMENTS:
     ;   &rand = word ptr [bp + 4]
 
     mov bx, [bp + 4]    ; bx = &rand
 
-    ; rand ^= rand << 13
+    ; rand ^= rand << 7
     mov dx, ss:[bx]
-    mov ax, ss:[bx + 2]
-    mov cx, ax
-    shl ax, 13
-    shr cx, 16 - 13
-    shl dx, 13
-    and dx, cx
+    shl dx, 7
     xor ss:[bx], dx
-    xor ss:[bx + 2], ax
 
-    ; rand ^= rand >> 17
+    ; rand ^= rand >> 9
     mov dx, ss:[bx]
-    shr dx, 1
-    xor word ptr [bx], 0
-    xor ss:[bx + 2], dx
-
-    ; rand ^= rand << 5
-    mov dx, ss:[bx]
-    mov ax, ss:[bx + 2]
-    mov cx, ax
-    shl ax, 5
-    shr cx, 16 - 5
-    shl dx, 5
-    and dx, cx
+    shr dx, 9
     xor ss:[bx], dx
-    xor ss:[bx + 2], ax
+
+    ; rand ^= rand << 8
+    mov dx, ss:[bx]
+    shl dx, 8
+    xor ss:[bx], dx
 
     mov sp, bp
     pop bp
