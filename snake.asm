@@ -11,8 +11,16 @@ INITIAL_LEN equ 3   ; must be greater than 1
 
 main:
     mov bp, sp
-    sub sp, 10 + 4 * INITIAL_LEN
+    sub sp, 10 + 4 * (INITIAL_LEN + 1)
 
+    ; NOTES:
+    ; The positions of all the segments of the snake are
+    ; stored as a list of dwords at the end of the variable
+    ; list for this function. That list includes a final
+    ; position that is not drawn, but is used to store where
+    ; the previous tail of the snake was (for when the snake
+    ; grows longer).
+    ;
     ; LOCAL VARIABLES:
     ;   fruit_x     = word ptr [bp - 2]
     ;   fruit_y     = word ptr [bp - 4]
@@ -24,6 +32,8 @@ main:
     ;   x2          = word ptr [bp - 16]
     ;   y2          = word ptr [bp - 18]
     ;   ...
+    ;   x_old       = word ptr [sp + 2]
+    ;   y_old       = word ptr [sp]
 
     ; mov ax, @data
     ; mov ds, ax
@@ -66,6 +76,8 @@ main:
     sub di, 4
     dec bx
     loop initial_draw_loop
+
+    mov ss:[di], bx
 
     mov word ptr [bp - 6], 1    ; initialise x_dir
     mov word ptr [bp - 8], 0    ; initialise y_dir
@@ -139,6 +151,7 @@ main:
     ;::::::::::::::::::::::::
 
     mov di, sp
+    add di, 4
 
     ; clear block that needs clearing
     push 0              ; black
@@ -148,7 +161,6 @@ main:
 
     mov di, sp
     mov cx, [bp - 10]
-    dec cx              ; assumes length > 1
 
     position_copy_loop:
     ; copy y down
@@ -178,11 +190,13 @@ main:
     ;::::::::::::::::::::::::::::::
 
     mov di, sp
+    add di, 4
     mov cx, [bp - 10]
     dec cx              ; assumes length > 1
     mov ax, [bp - 12]
     mov bx, [bp - 14]
 
+    ; TODO don't actually need to check the first 3 segments after the head
     position_check_loop:
     cmp ax, ss:[di + 2]
     jnz position_check_loop_end
