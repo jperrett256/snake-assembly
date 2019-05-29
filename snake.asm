@@ -44,11 +44,6 @@ main:
     mov ax, 0A000h
     mov es, ax
 
-    ; initial placement of fruit
-    call place_fruit
-    mov [bp - 2], cx
-    mov [bp - 4], dx
-
     mov word ptr [bp - 10], INITIAL_LEN     ; set starting length
 
     ; set initial positions and draw
@@ -78,9 +73,17 @@ main:
     loop initial_draw_loop
 
     mov ss:[di], bx
+    mov word ptr ss:[di - 2], GRID_HEIGHT/2
 
     mov word ptr [bp - 6], 1    ; initialise x_dir
     mov word ptr [bp - 8], 0    ; initialise y_dir
+
+    ; initial placement of fruit
+    lea ax, [bp - 10]
+    push ax
+    call place_fruit
+    mov [bp - 2], cx
+    mov [bp - 4], dx
 
     ;:::::::::::: main loop :::::::::::::
     update:
@@ -223,10 +226,12 @@ main:
     cmp cx, [bp - 14]
     jnz place_fruit_done
 
+    lea ax, [bp - 10]
+    push ax
+    call place_fruit
+
     inc word ptr [bp - 10]  ; increment length
     sub sp, 4               ; add space on stack for new coordinate
-
-    call place_fruit
 
     mov [bp - 2], cx
     mov [bp - 4], dx
@@ -345,11 +350,32 @@ place_fruit:
     mov bp, sp
     sub sp, 4
 
+    ; NOTES:
+    ;   The &positions argument is a pointer
+    ;   to a structure containing:
+    ;       length  (word)  = length of positions list
+    ;       x1      (word)
+    ;       y1      (word)
+    ;       x2      (word)
+    ;       y2      (word)
+    ;       ...
+    ;       x_old   (word)  = additional position (x)
+    ;       y_old   (word)  = additional position (y)
+    ;
+    ; ARGUMENTS:
+    ;   &positions  = word ptr [bp + 4]
+    ;
     ; LOCAL VARIABLES:
-    ;   x   = word ptr [bp - 2]
-    ;   y   = dword ptr [bp - 4]
+    ;   x           = word ptr [bp - 2]
+    ;   y           = word ptr [bp - 4]
 
     call rand_position
+
+    push dx
+    push cx
+    push [bp + 4]
+    call get_free_position
+
     mov [bp - 2], cx
     mov [bp - 4], dx
 
@@ -363,7 +389,98 @@ place_fruit:
 
     mov sp, bp
     pop bp
-    ret
+    ret 2
+
+get_free_position:
+    push bp
+    mov bp, sp
+    sub sp, 4
+
+    ; Finds a position near (x, y) that
+    ; is not occupied by the player.
+    ;
+    ; ARGUMENTS:
+    ;   &positions  = word ptr [bp + 4]
+    ;   x           = word ptr [bp + 6]
+    ;   y           = word ptr [bp + 8]
+    ;
+    ; LOCAL VARIABLES:
+    ;   x           = word ptr [bp - 2]
+    ;   y           = word ptr [bp - 4]
+
+
+    mov bx, [bp + 6]
+    mov [bp - 2], bx
+    mov bx, [bp + 8]
+    mov [bp - 4], bx
+
+    get_free_position_loop_setup:
+
+    mov di, [bp + 4]
+    mov cx, ss:[di]
+    inc cx          ; must compare with hidden final position
+    sub di, 2
+
+    get_free_position_loop:
+
+    mov bx, ss:[di]     ; positions[i].x
+    cmp bx, [bp - 2]
+    jnz get_free_position_loop_end
+
+    mov bx, ss:[di - 2] ; positions[i].y
+    cmp bx, [bp - 4]
+    jnz get_free_position_loop_end
+
+    ; found a match, try again with another position
+
+    cmp word ptr [bp - 2], GRID_WIDTH - 1
+    jge get_free_position_x_reset
+
+    inc word ptr [bp - 2]
+    jmp get_free_position_have_next_position
+
+    get_free_position_x_reset:
+
+    mov word ptr [bp - 2], 0
+
+    cmp word ptr [bp - 4], GRID_HEIGHT - 1
+    jge get_free_position_y_reset
+
+    inc word ptr [bp - 4]
+    jmp get_free_position_have_next_position
+
+    get_free_position_y_reset:
+
+    mov word ptr [bp - 4], 0
+
+    get_free_position_have_next_position:
+
+    ; check new coordinates are not where we started
+    ; TODO remove check?
+
+    mov bx, [bp - 2]
+    cmp [bp + 6], bx
+    jnz get_free_position_loop_setup
+
+    mov bx, [bp - 2]
+    cmp [bp + 6], bx
+    jnz get_next_position_exit ; if this happens, don't break the game
+
+    jmp get_free_position_loop_setup
+
+    get_free_position_loop_end:
+
+    sub di, 4
+    loop get_free_position_loop
+
+    get_next_position_exit:
+
+    mov cx, [bp - 2]
+    mov dx, [bp - 4]
+
+    mov sp, bp
+    pop bp
+    ret 6
 
 rand_position:
     push bp
